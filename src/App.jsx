@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Settings, Calculator as CalcIcon, Crosshair, ArrowRight } from 'lucide-react';
+import { Settings, Calculator as CalcIcon, Download } from 'lucide-react';
 import { HiArrowUpRight } from "react-icons/hi2";
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 const Header = () => (
-  <header className="header">
+  <header className="header" id="header-section">
     <div className="header-logo">
       <img src="/e-con.svg" alt="e-con Systems Logo" className="brand-logo" />
     </div>
@@ -18,8 +20,6 @@ const Footer = () => (
     <p>Copyright © {new Date().getFullYear()} <a href="https://www.e-consystems.com/" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none', fontWeight: '600' }}>e-con Systems®</a></p>
   </footer>
 );
-
-
 
 const App = () => {
   const [activeTab, setActiveTab] = useState(1);
@@ -94,6 +94,128 @@ const App = () => {
   const handleM3Change = (e) => {
     const { name, value } = e.target;
     setM3(prev => ({ ...prev, [name]: parseFloat(value) || '' }));
+  };
+
+  const handleDownloadReport = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('FOV Report');
+
+    const titles = ['FOV from Dimensions', 'Dimensions from FOV', 'FOV from Focal Length'];
+    const reportTitle = titles[activeTab - 1];
+
+    let firstInputTitle = 'Distance from Object (mm)';
+    let firstInputValue = activeTab === 1 ? m1.dist : m2.dist;
+    if (activeTab === 3) {
+      firstInputTitle = 'Effective Focal Length (mm)';
+      firstInputValue = m3.efl;
+    }
+
+    const inputsTitle = activeTab === 2 ? 'FOV (°)' : 'Dimension (mm)';
+    const calculatedTitle = activeTab === 2 ? 'Dimension (mm)' : 'FOV (°)';
+
+    const label1Input = activeTab === 2 ? 'HFOV' : 'Horizontal';
+    const label2Input = activeTab === 2 ? 'VFOV' : 'Vertical';
+    const label3Input = activeTab === 2 ? 'DFOV' : 'Diagonal';
+
+    const val1Input = activeTab === 1 ? m1.h : (activeTab === 2 ? m2.hfov : m3.h);
+    const val2Input = activeTab === 1 ? m1.v : (activeTab === 2 ? m2.vfov : m3.v);
+    const val3Input = activeTab === 1 ? m1.d : (activeTab === 2 ? m2.dfov : m3.d);
+
+    const label1Calc = activeTab === 2 ? 'Horizontal' : 'HFOV';
+    const label2Calc = activeTab === 2 ? 'Vertical' : 'VFOV';
+    const label3Calc = activeTab === 2 ? 'Diagonal' : 'DFOV';
+
+    const val1Calc = activeTab === 1 ? o1.hfov : (activeTab === 2 ? o2.h : o3.hfov);
+    const val2Calc = activeTab === 1 ? o1.vfov : (activeTab === 2 ? o2.v : o3.vfov);
+    const val3Calc = activeTab === 1 ? o1.dfov : (activeTab === 2 ? o2.d : o3.dfov);
+
+    const formatNum = (val) => Number((val || 0).toFixed(5));
+
+    // A1 to D1 merge and center and add the title
+    worksheet.mergeCells('A1:D1');
+    const cellA1 = worksheet.getCell('A1');
+    cellA1.value = reportTitle;
+    cellA1.font = { bold: true, size: 14 };
+
+    // A2 to C2 merge and center
+    worksheet.mergeCells('A2:C2');
+    const cellA2 = worksheet.getCell('A2');
+    cellA2.value = firstInputTitle;
+    cellA2.font = { bold: true };
+    worksheet.getCell('D2').value = firstInputValue;
+
+    // A3 to B3 merge and center
+    worksheet.mergeCells('A3:B3');
+    const cellA3 = worksheet.getCell('A3');
+    cellA3.value = inputsTitle;
+    cellA3.font = { bold: true };
+
+    // C3 to D3 merge and center
+    worksheet.mergeCells('C3:D3');
+    const cellC3 = worksheet.getCell('C3');
+    cellC3.value = calculatedTitle;
+    cellC3.font = { bold: true };
+
+    // Row 4
+    worksheet.getCell('A4').value = label1Input;
+    worksheet.getCell('B4').value = val1Input;
+    worksheet.getCell('C4').value = label1Calc;
+    worksheet.getCell('D4').value = formatNum(val1Calc);
+
+    // Row 5
+    worksheet.getCell('A5').value = label2Input;
+    worksheet.getCell('B5').value = val2Input;
+    worksheet.getCell('C5').value = label2Calc;
+    worksheet.getCell('D5').value = formatNum(val2Calc);
+
+    // Row 6
+    worksheet.getCell('A6').value = label3Input;
+    worksheet.getCell('B6').value = val3Input;
+    worksheet.getCell('C6').value = label3Calc;
+    worksheet.getCell('D6').value = formatNum(val3Calc);
+
+    // Styling: Make every cell bordered (thin) and center aligned
+    for (let r = 1; r <= 6; r++) {
+      for (let c = 1; c <= 4; c++) {
+        const cell = worksheet.getCell(r, c);
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        
+        // Ensure every cell has a thin border
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      }
+    }
+
+    // The whole table from A1 to D6 need to be thick bordered
+    for (let r = 1; r <= 6; r++) {
+      for (let c = 1; c <= 4; c++) {
+        const cell = worksheet.getCell(r, c);
+        const border = { ...cell.border };
+        if (r === 1) border.top = { style: 'thick' };
+        if (r === 6) border.bottom = { style: 'thick' };
+        if (c === 1) border.left = { style: 'thick' };
+        if (c === 4) border.right = { style: 'thick' };
+        cell.border = border;
+      }
+    }
+
+    worksheet.columns = [
+      { width: 30 }, { width: 25 }, { width: 30 }, { width: 25 }
+    ];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const now = new Date();
+    const timestamp = now.getFullYear() + 
+                      String(now.getMonth() + 1).padStart(2, '0') + 
+                      String(now.getDate()).padStart(2, '0') + "_" + 
+                      String(now.getHours()).padStart(2, '0') + 
+                      String(now.getMinutes()).padStart(2, '0');
+
+    saveAs(new Blob([buffer]), `FOV_Report_${timestamp}.xlsx`);
   };
 
   return (
@@ -242,6 +364,9 @@ const App = () => {
               </>
             )}
           </div>
+          <button className="download-report-btn" onClick={handleDownloadReport}>
+            <Download size={24} /> Download report
+          </button>
         </div>
       </main>
 
